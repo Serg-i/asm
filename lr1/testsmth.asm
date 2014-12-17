@@ -13,7 +13,7 @@ endLoopMessL db 14
 endMessage db 10,13,"Click to close",10,13,"$"
 endMessageL db 18 
 .code                                      
-begin:;1)40h бесконечный цикл 2)анализ нажатой клавиши  3)весь ввод/вывод в файл
+begin:;1)40h РґР»СЏ РІРІРѕРґР° 2)Р±РµСЃРєРѕРЅРµС‡РЅС‹Р№ С†РёРєР» + РІС‹С…РѕРґ РёР· РЅРµРіРѕ  3)РІРµСЃСЊ РІРІРѕРґ РІС‹РІРѕРґ РІ С„Р°Р№Р»
 mov ax,@data
 mov ds,ax
 call createFile
@@ -34,7 +34,7 @@ proc write;cx length of message, ds:dx buffer
 	mov ah,40h
 	mov bx,fileDesc
 	int 21h
-	mov bx,0001h; stdout - консоль как файл 
+	mov bx,0001h; stdout - ГЄГ®Г­Г±Г®Г«Гј ГЄГ ГЄ ГґГ Г©Г« 
 	xor ax,ax 
 	mov ah,40h
 	int 21h
@@ -45,9 +45,9 @@ proc read
 	xor ax,ax
 	mov ah,0ah
 	lea dx,buff
-	int 21h ; записывается в буфер 
+	int 21h ;РїСЂРѕРІРµСЂРєР° РЅР°Р»РёС‡РёСЏ СЃРёРјРІРѕР»Р° 
 	xor cx,cx
-	;cmp dx,'yes'
+	;cmp dx,'yes'; Р»РµРІРѕРµ Р·Р°РґР°РЅРёРµ
 	;jne proverkaNaNet
 	;je writeToScreen
 	;proverkaNaNet:
@@ -56,7 +56,7 @@ proc read
 	writeToScreen:
 	mov cl,buff[1] 
 	mov dx,offset buff+2
-	call write; всё что ввели вывели на экран
+	call write; РІС‹РІРѕРґ РЅР° СЌРєСЂР°РЅ
 	endOfProc:
 ret
 endp read 
@@ -86,7 +86,7 @@ proc createFile
 	int 21h
 	mov fileDesc,ax
 	jc  exit;todo open or create file
-	ret; возвращение указателя на место вызова
+	ret
 endp createFile
 exit:  
 lea dx,endMessage
