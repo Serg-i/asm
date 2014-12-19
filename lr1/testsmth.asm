@@ -47,17 +47,9 @@ proc read
 	lea dx,buff
 	int 21h ;проверка наличия символа 
 	xor cx,cx
-	;cmp dx,'yes'; левое задание
-	;jne proverkaNaNet
-	;je writeToScreen
-	;proverkaNaNet:
-	;cmp dx,'no'
-	;jne endOfProc
-	writeToScreen:
 	mov cl,buff[1] 
 	mov dx,offset buff+2
 	call write; вывод на экран
-	endOfProc:
 ret
 endp read 
 proc endlessLoop
@@ -65,13 +57,13 @@ proc endlessLoop
 	mov cl,helpMessL
 	call write
 	myLoop:
-		int 16h
-		xor ah,ah
 		mov ah,01h
+		int 16h
 		jnz myLoop    
 		mov ah, 00H    
 		int 16H
 		cmp ah,01h
+		xor ah,ah
 		jne myLoop
 	lea dx,endLoopMess
 	mov cl,endLoopMessL
