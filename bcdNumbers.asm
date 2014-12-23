@@ -1,4 +1,5 @@
 .model small
+.386
 .stack
 .data
 buff db 255,?,255 dup(?); buffer for string 
@@ -10,11 +11,13 @@ setCourseMess db "write new course",10,13,"1 USD = ","$"
 helpMess db 10,13,"press esc to exit in menu","$"
 endLoopMess db 10,13,"end of loop",10,13,"$"
 endMessage db 10,13,"Click to close",10,13,"$"
+file_error_mess db 10,13,"error: program can't open/create a file",10,13,"$"
 .code                                      
-begin:
+.startup
 mov ax,@data
 mov ds,ax
 menu:
+	call open_file
  	call write_course
 	lea dx,menuMess
 	call write_on_screen
@@ -23,19 +26,16 @@ menu:
 	jne exit
 	cmp buff[2],'1'
 	jne first
-	;code
 	jmp menu
 first:
 	cmp buff[2],'2'
 	jne second
-	;code
 	jmp menu
 second:	
 	cmp buff[2],'3'
-	jne exit;
+	jne exit
 	call write_course
 	call read_course
-	;code
 	jmp menu
 ;procedures
 proc write_on_screen;dx - message
@@ -83,21 +83,36 @@ proc endlessLoop
 	call write_on_screen
 	ret 
 endp endLessLoop
-proc createFile
+proc open_file
 	xor ax,ax 
+	mov ah,3dh
+	lea dx,filePath
+	mov al,2
+	int 21h
+	mov fileDesc,ax
+	jnc exit_create_file
+        xor ax,ax 
 	mov ah,3ch
 	lea dx,filePath
 	xor cx,cx
 	int 21h
 	mov fileDesc,ax
-	jc  exit;todo open or create file
-	ret; âîçâðàùåíèå óêàçàòåëÿ íà ìåñòî âûçîâà
-endp createFile
+	jnc exit_create_file
+	lea dx,file_error_mess
+	call write_on_screen
+	jmp exit	
+exit_create_file:	
+	ret
+endp open_file
+
 exit:  
 lea dx,endMessage
 call write_on_screen
+mov ah,3eh
+mov bx,fileDesc
+int 21h;todo: catch error
 xor ax,ax
 int 16h 
 mov ah,4ch
 int 21h
-end begin
+end
