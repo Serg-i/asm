@@ -2,7 +2,16 @@
 .386
 .stack
 .data
-buff db 255,?,255 dup(?); buffer for string 
+buff db 255,?,255 dup(?); buffer for string
+a db 6
+b db 7  
+sum_a label word
+sum_b db 0
+carry db 0
+course db 0,5,7,3,1; default course
+usd db 20 dup(?)
+usd_len db 0 
+belki db 40 dup(?) 
 filePath db "file.txt",0
 fileDesc dw ?
 menuMess db "write ",10,13," 1 - from BYR in USD ",10,13," 2 - from USD in BYR ",10,13," 3 - set course ",10,13,"$"
@@ -26,6 +35,10 @@ menu:
 	jne exit
 	cmp buff[2],'1'
 	jne first
+	mov al,a
+	add al,b 
+	jnc menu
+	adc carry,0
 	jmp menu
 first:
 	cmp buff[2],'2'
@@ -53,6 +66,21 @@ proc read_in_buff; save input in buf
 	xor cx,cx
 	ret
 endp read_in_buff
+proc read_number; read from buff in usd 
+ 	xor cx,cx
+	xor di,di
+	xor bx,bx
+	mov cl,buff[1]
+	mov bl,[buff+1]
+	inc bx
+convert_loop:
+	mov dh,buff[bx]
+	mov usd[di],dh
+	inc di
+	dec bx
+	loop convert_loop
+	ret 
+endp read_number
 proc write_course
 	lea dx,courseMess
 	call write_on_screen
@@ -104,7 +132,6 @@ proc open_file
 exit_create_file:	
 	ret
 endp open_file
-
 exit:  
 lea dx,endMessage
 call write_on_screen
