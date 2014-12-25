@@ -9,13 +9,14 @@ sum_a label word
 sum_b db 0
 carry db 0
 course db 0,5,7,3,1; default course
+course_l db 5
 usd db 20 dup(?)
 usd_len db 0 
 belki db 40 dup(?) 
 filePath db "file.txt",0
 fileDesc dw ?
 menuMess db "write ",10,13," 1 - from BYR in USD ",10,13," 2 - from USD in BYR ",10,13," 3 - set course ",10,13,"$"
-courseMess db 10,13,"current course is",10,13,"$"
+courseMess db 10,13,"current course is ","$"
 setCourseMess db "write new course",10,13,"1 USD = ","$"
 helpMess db 10,13,"press esc to exit in menu","$"
 endLoopMess db 10,13,"end of loop",10,13,"$"
@@ -27,7 +28,14 @@ mov ax,@data
 mov ds,ax
 menu:
 	call open_file
- 	call write_course
+	lea dx,courseMess
+	call write_on_screen
+	mov cl,[course_l]
+	lea si,course
+	call write_number
+	lea dx,buff
+	add dx,2
+	call write_on_screen
 	lea dx,menuMess
 	call write_on_screen
 	call read_in_buff 
@@ -35,10 +43,7 @@ menu:
 	jne exit
 	cmp buff[2],'1'
 	jne first
-	mov al,a
-	add al,b 
-	jnc menu
-	adc carry,0
+	;code 
 	jmp menu
 first:
 	cmp buff[2],'2'
@@ -47,7 +52,6 @@ first:
 second:	
 	cmp buff[2],'3'
 	jne exit
-	call write_course
 	call read_course
 	jmp menu
 ;procedures
@@ -66,27 +70,47 @@ proc read_in_buff; save input in buf
 	xor cx,cx
 	ret
 endp read_in_buff
-proc read_number; read from buff in usd 
+; read from buff in memory addres in SI register 
+;	IN:		SI- addres of BCD 
+;	OUT:	AX - length of bcd
+proc read_number
  	xor cx,cx
-	xor di,di
+	xor dx,dx
 	xor bx,bx
 	mov cl,buff[1]
 	mov bl,[buff+1]
 	inc bx
-convert_loop:
-	mov dh,buff[bx]
-	mov usd[di],dh
-	inc di
-	dec bx
-	loop convert_loop
+r_convert_loop:
+	mov dl,buff[bx]
+	sub dl,30h
+	mov [si],dl
+	inc si
+	dec ax
+	loop r_convert_loop
 	ret 
 endp read_number
-proc write_course
-	lea dx,courseMess
-	call write_on_screen
-;code
+; write bcd number in buff
+;	IN:		SI - address of BCD
+;			CL - length of BCD 
+proc write_number
+	xor dx,dx
+	xor bx,bx
+	add si,cx
+	add bx,1 ;correct start point of buff
+	mov buff[1],cl
+	inc cx; last number
+	w_convert_loop:	
+		mov dl,[si]
+		add dl,30h 
+		mov buff[bx],dl
+		inc bx
+		dec si
+	loop w_convert_loop
+	inc bx
+	mov buff[bx],"$"
+	
 	ret
-endp write_course
+endp write_number
 proc read_course
 	lea dx,setCourseMess
 	call write_on_screen
