@@ -5,9 +5,6 @@
 buff db 255,?,255 dup(?); buffer for string
 a db 6
 b db 7  
-sum_a label word
-sum_b db 0
-carry db 0
 course db 0,5,7,3,1; default course
 course_l db 5
 usd db 20 dup(?)
@@ -15,9 +12,11 @@ usd_len db 0
 belki db 40 dup(?) 
 filePath db "file.txt",0
 fileDesc dw ?
-menuMess db "write ",10,13," 1 - from BYR in USD ",10,13," 2 - from USD in BYR ",10,13," 3 - set course ",10,13,"$"
+menuMess db 10,13,"write ",10,13," 1 - from BYR in USD ",10,13," 2 - from USD in BYR ",10,13," 3 - set course ",10,13,"$"
 courseMess db 10,13,"current course is ","$"
-setCourseMess db "write new course",10,13,"1 USD = ","$"
+setCourseMess db 10,13,"write new course",10,13,"1 USD = ","$"
+set_usd_mess db 10,13,"write fund in usd: ","$"
+get_byr_mess db 10,13,"fund in byr:","$"
 helpMess db 10,13,"press esc to exit in menu","$"
 endLoopMess db 10,13,"end of loop",10,13,"$"
 endMessage db 10,13,"Click to close",10,13,"$"
@@ -26,16 +25,9 @@ file_error_mess db 10,13,"error: program can't open/create a file",10,13,"$"
 .startup
 mov ax,@data
 mov ds,ax
+call write_course_on_screen
 menu:
 	call open_file
-	lea dx,courseMess
-	call write_on_screen
-	mov cl,[course_l]
-	lea si,course
-	call write_number
-	lea dx,buff
-	add dx,2
-	call write_on_screen
 	lea dx,menuMess
 	call write_on_screen
 	call read_in_buff 
@@ -48,11 +40,27 @@ menu:
 first:
 	cmp buff[2],'2'
 	jne second
+	lea dx,set_usd_mess
+	call write_on_screen
+	call clear_buff
+	call read_in_buff
+	lea si,usd
+	call read_number_from_buff
+	mov [course_l],al
+	lea dx,get_byr_mess
+	call write_on_screen
 	jmp menu
 second:	
 	cmp buff[2],'3'
 	jne exit
-	call read_course
+	call write_course_on_screen
+	lea dx,setCourseMess
+	call write_on_screen
+	call read_in_buff
+	lea si,course
+	call read_number_from_buff
+	mov [course_l],al 
+	call write_course_on_screen
 	jmp menu
 ;procedures
 proc write_on_screen;dx - message
@@ -62,7 +70,8 @@ proc write_on_screen;dx - message
 	xor dx,dx
 	ret
 endp write_on_screen 
-proc read_in_buff; save input in buf
+; save input in buf
+proc read_in_buff 
 	xor ax,ax
 	mov ah,0ah
 	lea dx,buff
@@ -70,29 +79,41 @@ proc read_in_buff; save input in buf
 	xor cx,cx
 	ret
 endp read_in_buff
-; read from buff in memory addres in SI register 
+proc clear_buff
+	xor cx,cx
+	xor bx,bx 
+	mov cl,[buff + 1]
+	add bx,1
+	clear_loop:
+		mov buff[bx],0
+		inc bx
+	loop clear_loop
+	ret
+endp clear_buff
+; read from buff to SI  
 ;	IN:		SI- addres of BCD 
-;	OUT:	AX - length of bcd
-proc read_number
+;	OUT:	Al - length of bcd
+proc read_number_from_buff
  	xor cx,cx
 	xor dx,dx
 	xor bx,bx
 	mov cl,buff[1]
 	mov bl,[buff+1]
+	mov al,[buff+1]
 	inc bx
-r_convert_loop:
-	mov dl,buff[bx]
-	sub dl,30h
-	mov [si],dl
-	inc si
-	dec ax
+	r_convert_loop:
+		mov dl,buff[bx]
+		sub dl,30h
+		mov [si],dl
+		inc si
+		dec bx
 	loop r_convert_loop
 	ret 
-endp read_number
+endp read_number_from_buff
 ; write bcd number in buff
 ;	IN:		SI - address of BCD
 ;			CL - length of BCD 
-proc write_number
+proc write_number_to_buf
 	xor dx,dx
 	xor bx,bx
 	add si,cx
@@ -106,35 +127,23 @@ proc write_number
 		inc bx
 		dec si
 	loop w_convert_loop
-	inc bx
 	mov buff[bx],"$"
-	
 	ret
-endp write_number
-proc read_course
-	lea dx,setCourseMess
+endp write_number_to_buf
+proc write_course_on_screen
+	lea dx,courseMess
 	call write_on_screen
-;code	
-	xor ax,ax
-	int 16h 
+	mov cl,[course_l]
+	lea si,course
+	call write_number_to_buf
+	lea dx,buff
+	add dx,2
+	call write_on_screen 
 	ret
-endp read_course
-proc endlessLoop
-	lea dx,helpMess
-	call write_on_screen
-	myLoop:
-		int 16h
-		xor ah,ah
-		mov ah,01h
-		jnz myLoop    
-		mov ah, 00H    
-		int 16H
-		cmp ah,01h
-		jne myLoop
-	lea dx,endLoopMess
-	call write_on_screen
-	ret 
-endp endLessLoop
+endp write_course_on_screen
+proc mult_bcd
+ret
+endp mult_bcd
 proc open_file
 	xor ax,ax 
 	mov ah,3dh
