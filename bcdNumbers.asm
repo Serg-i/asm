@@ -3,13 +3,12 @@
 .stack
 .data
 buff db 255,?,255 dup(?); buffer for string
-a db 6
-b db 7  
 course db 0,5,7,3,1; default course
 course_l db 5
 usd db 20 dup(?)
-usd_len db 0 
-belki db 40 dup(?) 
+usd_l db 0 
+belki db 40 dup(?)
+belki_l db 0
 filePath db "file.txt",0
 fileDesc dw ?
 menuMess db 10,13,"write ",10,13," 1 - from BYR in USD ",10,13," 2 - from USD in BYR ",10,13," 3 - set course ",10,13,"$"
@@ -21,6 +20,10 @@ helpMess db 10,13,"press esc to exit in menu","$"
 endLoopMess db 10,13,"end of loop",10,13,"$"
 endMessage db 10,13,"Click to close",10,13,"$"
 file_error_mess db 10,13,"error: program can't open/create a file",10,13,"$"
+a db 9,9,9,9,1
+b db 8,1,4,5,6,7,8
+result db 50 dup(0)
+result_l db 0
 .code                                      
 .startup
 mov ax,@data
@@ -35,7 +38,19 @@ menu:
 	jne exit
 	cmp buff[2],'1'
 	jne first
-	;code 
+	;test sum
+	xor dx,dx
+	lea si,b
+	mov dh,7
+	lea di,a
+	mov dl,5
+	call sum_bcd
+	lea si,result
+	mov cl,result_l
+	call write_number_to_buf
+	lea dx,buff
+	add dx,2 
+	call write_on_screen
 	jmp menu
 first:
 	cmp buff[2],'2'
@@ -46,8 +61,15 @@ first:
 	call read_in_buff
 	lea si,usd
 	call read_number_from_buff
-	mov [course_l],al
+	mov [usd_l],al
 	lea dx,get_byr_mess
+	call write_on_screen
+	call mult_bcd
+	mov cl,belki_l
+	lea si,belki
+	call write_number_to_buf	
+	lea dx,buff
+	add dx,2
 	call write_on_screen
 	jmp menu
 second:	
@@ -112,7 +134,8 @@ proc read_number_from_buff
 endp read_number_from_buff
 ; write bcd number in buff
 ;	IN:		SI - address of BCD
-;			CL - length of BCD 
+;			CL - length of BCD
+;todo:	1)process fractal numbers(which have given accuracy)
 proc write_number_to_buf
 	xor dx,dx
 	xor bx,bx
@@ -130,6 +153,7 @@ proc write_number_to_buf
 	mov buff[bx],"$"
 	ret
 endp write_number_to_buf
+;write bcd to screen 
 proc write_course_on_screen
 	lea dx,courseMess
 	call write_on_screen
@@ -141,9 +165,92 @@ proc write_course_on_screen
 	call write_on_screen 
 	ret
 endp write_course_on_screen
+; multiply bcd numbers (tmp) course*usd
+;todo:	1)clear result before perform multiplying
+;		2)more than one number in usd:)
+;		3)round to given accuracy
 proc mult_bcd
+	xor ax,ax
+	xor bx,bx
+	xor dx,dx
+	xor cx,cx
+	xor di,di;parameter!
+	xor si,si;parameter!
+	lea si,usd
+	lea di,course
+	mov cl,course_l;parameter!
+	mul_loop:
+		mov al,[di]
+		mul usd
+		aam
+		adc al,dl
+		aaa
+		mov dl,ah
+		mov belki[bx],al
+		inc di
+		inc bx
+	loop mul_loop
+	mov belki[bx],dl
+	mov belki_l,bl;out parameter! or rename to result :)
 ret
 endp mult_bcd
+;IN:	DI - effective address of first number
+;		SI - effective addrest of second number
+;	 	dl - length of first number 
+;		dh - length of second number
+;OUT:	result - summ
+;		result_l - length of summ
+proc sum_bcd
+	xor cx,cx
+	xor ax,ax
+	xor bx,bx
+	cmp dl,dh
+	jne set_min
+	mov cl,dl
+	clc
+	jmp sum_loop
+	set_min:
+	jl set_x;cmp x,y
+	mov cl,dh
+	clc
+	jmp sum_loop
+	set_x:
+	mov cl,dl
+	clc
+	sum_loop:
+		mov al,[si]
+		adc al,[di]
+		aaa 
+		mov result[bx],al
+		inc bx 
+		inc si 
+		inc di
+	loop sum_loop
+	adc result[bx],0
+	cmp dl,dh
+	je fin_sum
+	clc
+	jg greater_num
+	sub dh,dl
+	mov cl,dh
+	mov di,si
+	jmp correct_num
+	greater_num:
+	sub dl,dh 
+	mov cl,dl
+	correct_num:
+		mov al,result[bx]
+		adc al,[di]
+		aaa
+		mov result[bx],al
+		inc bx
+		inc di
+	loop correct_num
+	adc result[bx],0
+	fin_sum:
+	mov result_l,bl
+	ret
+endp sum_bcd 
 proc open_file
 	xor ax,ax 
 	mov ah,3dh
@@ -170,7 +277,7 @@ lea dx,endMessage
 call write_on_screen
 mov ah,3eh
 mov bx,fileDesc
-int 21h;todo: catch error
+int 21h;todo: catch errors
 xor ax,ax
 int 16h 
 mov ah,4ch
