@@ -121,15 +121,27 @@ proc clear_bcd
 	mov cl,belki_l
 	cmp cl,0
 	je end_clear_bcd 
-	xor si,si
+	xor di,di
 	clear_bcd_loop:
-		mov belki[si],0
-		inc si
+		mov belki[di],0
+		inc di
 	loop clear_bcd_loop
 	mov belki_l,0
 	end_clear_bcd:
 	ret 
 endp clear_bcd
+proc clear_result
+	mov cl,result_l
+	cmp cl,0
+	je end_clear_result
+	xor di,di
+	clear_result_loop:
+		mov result[di],0
+		inc di
+	loop clear_result_loop
+	end_clear_result:
+	ret
+endp clear_result
 ; read from buff to SI  
 ;	IN:		SI- addres of BCD 
 ;	OUT:	Al - length of bcd
@@ -151,8 +163,8 @@ proc read_number_from_buff
 	ret 
 endp read_number_from_buff
 ; write bcd number in buff
-;	IN:		SI - address of BCD
-;			CL - length of BCD
+;IN:	SI - address of BCD
+;	CL - length of BCD
 ;todo:	1)process fractal numbers(which have given accuracy)
 proc write_number_to_buf
 	xor dx,dx
@@ -198,7 +210,8 @@ proc mult_bcd
 	mov al,dh
 	add si,ax
 	push si
-	push dx 
+	push dx
+	call clear_result 
 	mul_general_loop:
 	call clear_bcd
 	mov tmp_numb,0
@@ -232,6 +245,7 @@ proc mult_bcd
 	push dx; save length of numbers
 	mov cl,dl
 	xor dx,dx
+	clc
 	mul_loop:
 		mov al,[di+bx]
 		mul tmp_numb
@@ -317,7 +331,7 @@ both_not_zero:
 	sub dl,dh 
 	mov cl,dl
 	correct_num:
-		mov al,result[bx]
+		mov al,[di]
 		adc al,0
 		aaa
 		mov result[bx],al
@@ -330,7 +344,7 @@ both_not_zero:
 	ret
 	xor di,di 
 	xor si,si
-endp sum_bcd 
+endp sum_bcd
 proc open_file
 	xor ax,ax 
 	mov ah,3dh
