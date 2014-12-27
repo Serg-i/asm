@@ -242,9 +242,6 @@ proc mult_bcd
 	loop add_zeroes_at_end
 	sub di,bx
 	adding_zero_not_needed:
-	jne not_zero
-	mov belki,
-	not_jero:
 	push si
 	push dx; save length of numbers
 	mov cl,dl
