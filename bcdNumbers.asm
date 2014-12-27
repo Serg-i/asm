@@ -21,8 +21,8 @@ helpMess db 10,13,"press esc to exit in menu","$"
 endLoopMess db 10,13,"end of loop",10,13,"$"
 endMessage db 10,13,"Click to close",10,13,"$"
 file_error_mess db 10,13,"error: program can't open/create a file",10,13,"$"
-a db 0,0,5,7,3,1
-b db 0,5,2,1,4
+a db 9,9,9,9,9,1
+b db 0,0,0,0,4
 result db 50 dup(0)
 result_l db 0
 .code                                      
@@ -139,6 +139,7 @@ proc clear_result
 		mov result[di],0
 		inc di
 	loop clear_result_loop
+	mov result_l,0
 	end_clear_result:
 	ret
 endp clear_result
@@ -241,6 +242,9 @@ proc mult_bcd
 	loop add_zeroes_at_end
 	sub di,bx
 	adding_zero_not_needed:
+	jne not_zero
+	mov belki,
+	not_jero:
 	push si
 	push dx; save length of numbers
 	mov cl,dl
@@ -256,6 +260,10 @@ proc mult_bcd
 		mov belki[bx],al
 		inc bx
 	loop mul_loop
+	jnc add_to_result
+	adc belki[bx],0
+	inc bx	
+add_to_result:
 	mov belki[bx],dl
 	mov belki_l,bl 
 	lea di,belki
@@ -268,11 +276,11 @@ proc mult_bcd
 	ret
 endp mult_bcd
 ;IN:	DI - effective address of first number
-;		SI - effective addrest of second number
-;	 	dl - length of first number 
-;		dh - length of second number
+;	SI - effective addrest of second number
+;	dl - length of first number 
+;	dh - length of second number
 ;OUT:	result - summ
-;		result_l - length of summ
+;	result_l - length of summ
 proc sum_bcd
 	xor cx,cx
 	xor ax,ax
@@ -321,15 +329,16 @@ both_not_zero:
 	adc result[bx],0
 	cmp dl,dh
 	je end_sum_bcd
-	clc
 	jg greater_num
 	sub dh,dl
 	mov cl,dh
 	mov di,si
+	clc
 	jmp correct_num
 	greater_num:
 	sub dl,dh 
 	mov cl,dl
+	clc
 	correct_num:
 		mov al,[di]
 		adc al,0
