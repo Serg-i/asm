@@ -2,11 +2,16 @@
 .386
 .stack 200h
 .data
-buff db 255,?,255 dup(?); buffer for string
+max_length equ 25
+accuracy equ 4
+comma_pos db 0
+buff db 250,?,250 dup(?); buffer for string
 course db 0,5,7,3,1; default course
 course_l db 5
+course_f db 0
 usd db 20 dup(0)
-usd_l db 0 
+usd_l db 0
+usd_f db 0 
 belki db 40 dup(0)
 belki_l db 0
 tmp_numb db 0
@@ -21,6 +26,8 @@ helpMess db 10,13,"press esc to exit in menu","$"
 endLoopMess db 10,13,"end of loop",10,13,"$"
 endMessage db 10,13,"Click to close",10,13,"$"
 file_error_mess db 10,13,"error: program can't open/create a file",10,13,"$"
+number_error_mess db 10,13,"error: not a number",10,13,"$"
+max_length_mess db 10,13, "error: max length is 25 symbols",10,13,"$"
 a db 9,9,9,9,9,1
 b db 0,0,0,0,4
 result db 50 dup(0)
@@ -63,6 +70,7 @@ first:
 	lea si,usd
 	call read_number_from_buff
 	mov [usd_l],al
+	mov [usd_f],ah
 	lea dx,get_byr_mess
 	call write_on_screen
 	lea di,course
@@ -72,6 +80,9 @@ first:
 	call mult_bcd
 	mov cl,result_l
 	lea si,result
+	mov al,result_l
+	sub al,[usd_f]
+	sub al,[course_f]
 	call write_number_to_buf
 	lea dx,buff
 	add dx,2
@@ -86,7 +97,8 @@ second:
 	call read_in_buff
 	lea si,course
 	call read_number_from_buff
-	mov [course_l],al 
+	mov [course_l],al
+	mov [course_f],ah
 	call write_course_on_screen
 	jmp menu
 ;procedures
@@ -144,21 +156,42 @@ proc clear_result
 	ret
 endp clear_result
 ; read from buff to SI  
-;	IN:		SI- addres of BCD 
+;	IN:	SI- addres of BCD 
 ;	OUT:	Al - length of bcd
+;		AH - fractal length
 proc read_number_from_buff
  	xor cx,cx
+	xor ax,ax
 	xor dx,dx
 	xor bx,bx
 	mov cl,buff[1]
 	mov bl,[buff+1]
 	mov al,[buff+1]
 	inc bx
+	cmp al,max_length
+	jg max_length_error
 	r_convert_loop:
 		mov dl,buff[bx]
+		cmp dl,','
+		jne r_convert_continue0
+		cmp ah,0
+		jne number_error 
+		mov ah,al
+		dec al
+		inc ah
+		sub ah,bl
+		cmp ah,0
+		je number_error
+		jmp r_convert_continue2
+	r_convert_continue0:
 		sub dl,30h
+		cmp dl,9h
+		jna r_convert_continue1
+		jmp number_error		
+	r_convert_continue1:
 		mov [si],dl
 		inc si
+	r_convert_continue2:
 		dec bx
 	loop r_convert_loop
 	ret 
@@ -166,22 +199,48 @@ endp read_number_from_buff
 ; write bcd number in buff
 ;IN:	SI - address of BCD
 ;	CL - length of BCD
-;todo:	1)process fractal numbers(which have given accuracy)
+;	al - position of comma (from real begining of number)
+;	ah - accuracy
 proc write_number_to_buf
 	xor dx,dx
 	xor bx,bx
 	add si,cx
-	add bx,1 ;correct start point of buff
-	mov buff[1],cl
-	inc cx; last number
-	w_convert_loop:	
+	cmp al,cl
+	jnl write_number_to_buf_set_initial
+	inc cx
+	write_number_to_buf_set_initial:
+	mov ah,accuracy
+	inc bx ;correct start point of buff
+	add al,2 ;also need correction
+	inc cx ;last number
+	w_convert_loop:
+		cmp bl,al
+		jne w_convert_loop_c0
+		mov buff[bx],','
+		jmp move_index
+	w_convert_loop_c0:
+		jle w_convert_loop_c1
+		dec ah
+	w_convert_loop_c1:	
 		mov dl,[si]
-		add dl,30h 
+		add dl,30h
 		mov buff[bx],dl
-		inc bx
+		cmp ah,0
+		jne move_val
+		;round 
 		dec si
+		mov dl,[si]
+		cmp dl,5
+		jmp end_loop  
+	move_val:
+		dec si
+	move_index:
+		inc bx
 	loop w_convert_loop
+	end_loop:
 	mov buff[bx],"$"
+	dec bx
+	mov buff[1],bl
 	ret
 endp write_number_to_buf
 ;write bcd to screen 
@@ -189,6 +248,8 @@ proc write_course_on_screen
 	lea dx,courseMess
 	call write_on_screen
 	mov cl,[course_l]
+	mov al,[course_l]
+	sub al,[course_f]
 	lea si,course
 	call write_number_to_buf
 	lea dx,buff
@@ -350,7 +411,7 @@ both_not_zero:
 	ret
 	xor di,di 
 	xor si,si
-endp sum_bcd
+endp sum_bcd	
 proc open_file
 	xor ax,ax 
 	mov ah,3dh
@@ -365,13 +426,23 @@ proc open_file
 	xor cx,cx
 	int 21h
 	mov fileDesc,ax
-	jnc exit_create_file
-	lea dx,file_error_mess
-	call write_on_screen
-	jmp exit	
+	jc file_error
 exit_create_file:	
 	ret
 endp open_file
+;errors
+file_error:
+	lea dx,file_error_mess
+	call write_on_screen
+	jmp exit
+number_error:
+	lea dx,number_error_mess
+	call write_on_screen
+	jmp menu
+max_length_error:
+	lea dx,max_length_mess
+	call write_on_screen
+	jmp menu
 exit:  
 lea dx,endMessage
 call write_on_screen
