@@ -4,24 +4,30 @@
 .data
 max_length equ 25
 accuracy equ 4
+zero_flag db 1
+comma_flag db 0
 comma_pos db 0
 buff db 250,?,250 dup(?); buffer for string
-course db 0,5,7,3,1; default course
+course db 0,5,7,3,1,45 dup(0); default course
 course_l db 5
 course_f db 0
-usd db 20 dup(0)
+usd db 50 dup(0)
 usd_l db 0
 usd_f db 0 
-belki db 40 dup(0)
+belki db 50 dup(0)
 belki_l db 0
 tmp_numb db 0
 filePath db "file.txt",0
 fileDesc dw ?
-menuMess db 10,13,"write ",10,13," 1 - from BYR in USD ",10,13," 2 - from USD in BYR ",10,13," 3 - set course ",10,13,"$"
+menuMess db 10,13,"write ",10,13," 1 - from USD in BYR ",10,13," 2 - set course ",10,13,"$"
 courseMess db 10,13,"current course is ","$"
+course_mess_l db 20
 setCourseMess db 10,13,"write new course",10,13,"1 USD = ","$"
 set_usd_mess db 10,13,"write fund in usd: ","$"
-get_byr_mess db 10,13,"fund in byr:","$"
+usd_mess db 10,13,"fund in usd: ","$"
+usd_mess_l db 15
+get_byr_mess db 10,13,"fund in byr: ","$"
+get_byr_mess_l db 15
 helpMess db 10,13,"press esc to exit in menu","$"
 endLoopMess db 10,13,"end of loop",10,13,"$"
 endMessage db 10,13,"Click to close",10,13,"$"
@@ -30,15 +36,15 @@ number_error_mess db 10,13,"error: not a number",10,13,"$"
 max_length_mess db 10,13, "error: max length is 25 symbols",10,13,"$"
 a db 9,9,9,9,9,1
 b db 0,0,0,0,4
-result db 50 dup(0)
+result db 100 dup(0)
 result_l db 0
 .code                                      
 .startup
 mov ax,@data
 mov ds,ax
 call write_course_on_screen
+call open_file
 menu:
-	call open_file
 	lea dx,menuMess
 	call write_on_screen
 	call read_in_buff 
@@ -46,31 +52,23 @@ menu:
 	jne exit
 	cmp buff[2],'1'
 	jne first
-	;test sum
-	xor dx,dx
-	lea si,b
-	mov dh,5
-	lea di,a
-	mov dl,6
-	call sum_bcd
-	lea si,result
-	mov cl,result_l
-	call write_number_to_buf
-	lea dx,buff
-	add dx,2 
-	call write_on_screen
-	jmp menu
-first:
-	cmp buff[2],'2'
-	jne second
 	lea dx,set_usd_mess
 	call write_on_screen
 	call clear_buff
+	call clear_usd
 	call read_in_buff
 	lea si,usd
 	call read_number_from_buff
 	mov [usd_l],al
 	mov [usd_f],ah
+	lea dx,usd_mess
+	mov cl,usd_mess_l
+	call write_to_file
+	lea dx,buff
+	add dx,2
+	mov cl,[buff+1]
+	dec cx
+	call write_to_file
 	lea dx,get_byr_mess
 	call write_on_screen
 	lea di,course
@@ -78,18 +76,29 @@ first:
 	lea si,usd
 	mov dh,usd_l
 	call mult_bcd
+	call round_number
 	mov cl,result_l
-	lea si,result
-	mov al,result_l
-	sub al,[usd_f]
-	sub al,[course_f]
+	mov dl,result_l
+	sub dl,[usd_f]
+	sub dl,[course_f]; set position of comma from beginning of number
+	lea di,result 
 	call write_number_to_buf
+	call detect_zeroes_at_begin
 	lea dx,buff
 	add dx,2
+	add dx,ax
 	call write_on_screen
+	lea dx,get_byr_mess
+	mov cl,get_byr_mess_l
+	call write_to_file
+	lea dx,buff
+	add dx,2
+	mov cl,[buff+1]
+	dec cx
+	call write_to_file
 	jmp menu
-second:	
-	cmp buff[2],'3'
+first:	
+	cmp buff[2],'2'
 	jne exit
 	call write_course_on_screen
 	lea dx,setCourseMess
@@ -100,6 +109,14 @@ second:
 	mov [course_l],al
 	mov [course_f],ah
 	call write_course_on_screen
+	lea dx,courseMess
+	mov cl,course_mess_l
+	call write_to_file
+	lea dx,buff
+	add dx,2
+	mov cl,[buff+1]
+	dec cx
+	call write_to_file
 	jmp menu
 ;procedures
 proc write_on_screen;dx - message
@@ -155,85 +172,222 @@ proc clear_result
 	end_clear_result:
 	ret
 endp clear_result
-; read from buff to SI  
+proc clear_usd
+	mov cl,usd_l
+	cmp cl,0
+	je end_clear_usd
+	xor di,di
+	clear_usd_loop:
+		mov usd[di],0
+		inc di
+	loop clear_usd_loop
+	mov usd_l,0
+	end_clear_usd:
+	ret
+endp clear_usd
+;in:	BUFF
+;out:	ax - length unuseful zeroes 
+proc detect_zeroes_at_begin
+	xor ax,ax
+	xor bx,bx
+	xor dx,dx
+	add bx,2
+	mov dh,[buff+1]
+	inc dh
+	detect_zeroes_at_begin_l:
+	mov dl, buff[bx]
+	cmp dl,'0'
+	jne end_detect 
+	mov dl,buff[bx+1];for 0,01
+	cmp dl,','
+	je end_detect
+	inc bl
+	cmp bl,dh ;all zeroes)
+	jne detect_zeroes_at_begin_l
+	dec bx
+	end_detect:
+	sub bx,2
+	mov ax,bx
+	ret
+endp detect_zeroes_at_begin
+;IN:	buff
+;OUT:	boolean
+proc detect_comma
+	xor cx,cx
+	xor bx,bx
+	mov cl,[buff+1]
+	add bx,2
+	detect_comma_loop:
+		mov dl, buff[bx]
+		cmp dl,','
+		jne detect_comma_cont
+		mov [comma_flag],1
+		detect_comma_cont:
+	loop detect_comma_loop
+	ret
+endp detect_comma
+; read from buff to BCD  
 ;	IN:	SI- addres of BCD 
 ;	OUT:	Al - length of bcd
 ;		AH - fractal length
 proc read_number_from_buff
+	mov [comma_flag],0
+	mov [zero_flag],1
+	call detect_comma
  	xor cx,cx
 	xor ax,ax
 	xor dx,dx
 	xor bx,bx
 	mov cl,buff[1]
+	call detect_zeroes_at_begin
+	mov dl,al
+	sub cl,dl
+	cmp cl,0
+	je zero_mode
 	mov bl,[buff+1]
 	mov al,[buff+1]
 	inc bx
 	cmp al,max_length
 	jg max_length_error
+	sub al,dl
 	r_convert_loop:
 		mov dl,buff[bx]
 		cmp dl,','
 		jne r_convert_continue0
 		cmp ah,0
 		jne number_error 
-		mov ah,al
-		dec al
-		inc ah
+		mov ah,[buff+1]
+		dec al; -','
+		cmp [zero_flag],1 ; for 1,0000(0) input
+		jne set_fractal_length
+		mov ah,0
+		mov [zero_flag],0
+		jmp r_convert_continue3
+		set_fractal_length:
+		inc ah;
 		sub ah,bl
 		cmp ah,0
 		je number_error
-		jmp r_convert_continue2
+		jmp r_convert_continue3
 	r_convert_continue0:
+		cmp [comma_flag],1
+		jne r_convert_continue1
+		cmp [zero_flag],1;for 1,010(0) input
+		jne r_convert_continue1
+		cmp dl,'0'
+		jne  r_convert_continue1
+		inc dh
+		dec al
+		jmp r_convert_continue3
+	r_convert_continue1:
+		mov [zero_flag],0
 		sub dl,30h
 		cmp dl,9h
-		jna r_convert_continue1
+		jna r_convert_continue2
 		jmp number_error		
-	r_convert_continue1:
+	r_convert_continue2:
 		mov [si],dl
 		inc si
-	r_convert_continue2:
+	r_convert_continue3:
 		dec bx
 	loop r_convert_loop
-	ret 
+	jmp end_read; al-[buff+1]
+	sub ah,dh
+	zero_mode:
+	mov dl,0h
+	mov [si],dl
+	mov al,1
+	mov ah,0
+	end_read:
+	ret
 endp read_number_from_buff
-; write bcd number in buff
-;IN:	SI - address of BCD
+;IN:	DI - address of BCD
 ;	CL - length of BCD
-;	al - position of comma (from real begining of number)
-;	ah - accuracy
-proc write_number_to_buf
-	xor dx,dx
+;	dl - position of comma
+;	dh - accuracy
+;out:	bx - length of number
+proc round_number;round result
 	xor bx,bx
-	add si,cx
-	cmp al,cl
+	;set inital data 
+	lea di,result
+	mov cl,result_l
+	mov dl,[usd_f]
+	add dl,[course_f];set position of comma from end of number
+	mov dh,accuracy
+	;code of procedure
+	cmp dl,0
+	je end_round_number
+	cmp dl,dh 
+	jle end_round_number
+	sub dl,dh
+	sub cl,dl ;decrease counter to round length
+	mov bl,dl ; set index to rounded number 
+	dec bl; correct pointer 
+	mov al,[di + bx ]
+	cmp al,5 
+	jl end_round_number
+	inc bx
+	stc 
+	round_loop:
+	mov al,[di+bx]
+	adc al,0
+	aaa
+	mov [di+bx],al
+	inc bx
+	loop round_loop
+	mov al,[di+bx]
+	adc al,0
+	mov [di+bx],al
+	mov result_l,bl
+	end_round_number: 
+	ret
+endp round_number
+; write bcd number in buff
+;IN:	di - address of BCD
+;	CL - length of BCD
+;	dl - position of comma (from real begining of number)
+;	dh - accuracy
+proc write_number_to_buf
+	xor ax,ax
+	xor bx,bx
+	add di,cx
+	cmp dl,cl
 	jnl write_number_to_buf_set_initial
 	inc cx
 	write_number_to_buf_set_initial:
-	mov ah,accuracy
+	mov dh,accuracy
 	inc bx ;correct start point of buff
-	add al,2 ;also need correction
+	add dl,2 ;also need correction
 	inc cx ;last number
+	inc dh
 	w_convert_loop:
-		cmp bl,al
+		cmp bl,dl
 		jne w_convert_loop_c0
+		cmp dl,0
 		mov buff[bx],','
 		jmp move_index
 	w_convert_loop_c0:
 		jle w_convert_loop_c1
-		dec ah
+		dec dh
 	w_convert_loop_c1:	
-		mov dl,[si]
-		add dl,30h
-		mov buff[bx],dl
-		cmp ah,0
+		mov al,[di]
+		add al,30h
+		mov buff[bx],al
+		cmp dh,0
 		jne move_val
-		;round 
-		dec si
-		mov dl,[si]
-		cmp dl,5
-		jmp end_loop  
+		;round -remove 
+		dec di
+		mov al,[di]
+		add al,5
+		aaa
+		jnc end_loop
+		inc di
+		mov al,[di]
+		adc al,30h
+		mov buff[bx],al 
+		jmp end_loop
 	move_val:
-		dec si
+		dec di
 	move_index:
 		inc bx
 	loop w_convert_loop
@@ -243,14 +397,14 @@ proc write_number_to_buf
 	mov buff[1],bl
 	ret
 endp write_number_to_buf
-;write bcd to screen 
+;write bcd course to screen 
 proc write_course_on_screen
 	lea dx,courseMess
 	call write_on_screen
 	mov cl,[course_l]
-	mov al,[course_l]
-	sub al,[course_f]
-	lea si,course
+	mov dl,[course_l]
+	sub dl,[course_f]
+	lea di,course
 	call write_number_to_buf
 	lea dx,buff
 	add dx,2
@@ -258,14 +412,12 @@ proc write_course_on_screen
 	ret
 endp write_course_on_screen
 ;IN:	DI - effective address of first number
-;		SI - effective addrest of second number
-;	 	dl - length of first number 
-;		dh - length of second number
+;	SI - effective addrest of second number
+;	dl - length of first number 
+;	dh - length of second number
 ; multiply bcd numbers (tmp) course*usd
-;todo:	1)clear result before perform multiplying
-;		2)more than one number in usd:)
-;		3)round to given accuracy
-;		4)use stack
+;todo:	3)round to given accuracy
+;	4)use stack
 proc mult_bcd
 	push di
 	xor ax,ax;start at first digit
@@ -308,8 +460,8 @@ proc mult_bcd
 	mov cl,dl
 	xor dx,dx
 	clc
-	mul_loop:
-		mov al,[di+bx]
+ 	mul_loop:
+ 		mov al,[di+bx]
 		mul tmp_numb
 		aam
 		adc al,dl
@@ -411,7 +563,16 @@ both_not_zero:
 	ret
 	xor di,di 
 	xor si,si
-endp sum_bcd	
+endp sum_bcd
+;log 
+proc write_to_file;cx length of message, ds:dx buffer
+	xor ax,ax  
+	mov ah,40h
+	mov bx,fileDesc
+	int 21h
+	xor ax,ax
+ret 
+endp write_to_file	
 proc open_file
 	xor ax,ax 
 	mov ah,3dh
