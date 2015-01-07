@@ -216,22 +216,17 @@ read_line endp
 ;out:	dl 0/1 1 - contain, 0 - !contain
 check_byte_in_array proc
  	cld
-	push ax 
+	push ax
+	push di
+	mov di,si
 	xor dx,dx
-	mov dl,al
-	xor dh,dh
-	jcxz end_check
-	check_loop:
-	lodsb
-	cmp al,dl
-	je set_1  
-	loop check_loop
-	end_check:	
-	xor dx,dx
-	jmp end_check_byte_in_array
-	set_1:
-	mov dl,1
+	jcxz end_check_byte_in_array
+	inc cx 
+	repne scasb
+	jcxz end_check_byte_in_array
+	mov dl,1 
 	end_check_byte_in_array:
+	pop di
 	pop ax
 	ret 	
 check_byte_in_array endp
@@ -366,11 +361,18 @@ get_byte_map proc
 		mov si,di; di address of byte map
 		add di,ax; set current position
 		pop ax
+		jcxz set_char
 		call check_byte_in_array
 		cmp dl,0
-		jne cont 
+		jne cont
+		set_char: 
 		stosb
 		inc ah
+		push ax
+		mov dl,al
+		mov ah,2h
+		int 21h 
+		pop ax 
 		cont:
 		pop si
 		pop cx
@@ -378,6 +380,11 @@ get_byte_map proc
 	jnz process_buffer  
 	jmp read_file_loop
 	end_of_read:
+	push ax
+	mov dl,' '
+	mov ah,2h
+	int 21h
+	pop ax
 	ret
 get_byte_map endp
 ;errors
